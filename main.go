@@ -30,7 +30,7 @@ func getMovies(w http.ResponseWriter, r *http.Request) {
 
 func getMovie(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
+	id := r.PathValue("id")
 	for _, item := range movies {
 		if item.ID == id {
 			json.NewEncoder(w).Encode(item)
@@ -41,7 +41,7 @@ func getMovie(w http.ResponseWriter, r *http.Request) {
 
 func deleteMovie(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
+	id := r.PathValue("id")
 	for index, item := range movies {
 		if item.ID == id {
 			movies = append(movies[:index], movies[index+1:]...)
@@ -62,7 +62,7 @@ func createMovie(w http.ResponseWriter, r *http.Request) {
 
 func updateMovie(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
+	id := r.PathValue("id")
 	for index, item := range movies {
 		if item.ID == id {
 			movies = append(movies[:index], movies[index+1:]...)
@@ -107,16 +107,16 @@ func main() {
 	// crud api:
 	movies = append(movies, Movie{ID: "1", Isbn: "48227", Title: "Movie1", Director: &Director{Firstname: "John", Lastname: "Doe"}})
 	movies = append(movies, Movie{ID: "2", Isbn: "45455", Title: "Movie2", Director: &Director{Firstname: "Jane", Lastname: "Smith"}})
-	r := http.NewServeMux()
-	r.HandleFunc("/GET/movies", getMovies)
-	r.HandleFunc("/GET/movies/{id}", getMovie)
-	r.HandleFunc("/POST/movies", createMovie)
-	r.HandleFunc("/PUT/movies/{id}", updateMovie)
-	r.HandleFunc("/DELETE/movies/{id}", deleteMovie)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /movies", getMovies)
+	mux.HandleFunc("GET /movies/{id}", getMovie)
+	mux.HandleFunc("POST /movies", createMovie)
+	mux.HandleFunc("PUT /movies/{id}", updateMovie)
+	mux.HandleFunc("DELETE /movies/{id}", deleteMovie)
 
 	fmt.Printf("Starting server at port 8080\n")
 
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatal(err)
 	}
 }
