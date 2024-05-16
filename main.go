@@ -11,7 +11,6 @@ import (
 
 type Movie struct {
 	ID       string    `json: "id"`
-	Isbn     string    `json: "isbn"`
 	Title    string    `json: "title"`
 	Director *Director `json: "director"`
 }
@@ -54,10 +53,15 @@ func deleteMovie(w http.ResponseWriter, r *http.Request) {
 func createMovie(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var movie Movie
-	_ = json.NewDecoder(r.Body).Decode(&movie)
+	if err := r.ParseForm(); err != nil {
+		fmt.Fprintf(w, "ParseForm() err: %v", err)
+	}
+	fmt.Fprint(w, "POST request succesful\n")
 	movie.ID = strconv.Itoa(rand.Intn(100000000))
+	movie.Title = r.FormValue("title")
+	movie.Director = &Director{Firstname: r.FormValue("firstname"), Lastname: r.FormValue("lastname")}
 	movies = append(movies, movie)
-	json.NewEncoder(w).Encode(movie)
+	json.NewEncoder(w).Encode(movies)
 }
 
 func updateMovie(w http.ResponseWriter, r *http.Request) {
@@ -76,16 +80,6 @@ func updateMovie(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(movies)
 }
 
-func formHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		fmt.Fprintf(w, "ParseForm() err: %v", err)
-	}
-	fmt.Fprint(w, "POST request succesful\n")
-	name := r.FormValue("name")
-	address := r.FormValue("address")
-	fmt.Fprintf(w, "Name: %s, address: %s", name, address)
-}
-
 func helloHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/hello" {
 		http.Error(w, "404 not found", http.StatusNotFound)
@@ -98,16 +92,17 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	movies = append(movies, Movie{ID: "1", Title: "Movie1", Director: &Director{Firstname: "John", Lastname: "Doe"}})
+	movies = append(movies, Movie{ID: "2", Title: "Movie2", Director: &Director{Firstname: "Jane", Lastname: "Smith"}})
+
+	mux := http.NewServeMux()
+
 	// webserver:
 	fileServer := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fileServer)
-	http.HandleFunc("/form", formHandler)
-	http.HandleFunc("/hello", helloHandler)
+	mux.Handle("/", fileServer)
+	mux.HandleFunc("/hello", helloHandler)
 
 	// crud api:
-	movies = append(movies, Movie{ID: "1", Isbn: "48227", Title: "Movie1", Director: &Director{Firstname: "John", Lastname: "Doe"}})
-	movies = append(movies, Movie{ID: "2", Isbn: "45455", Title: "Movie2", Director: &Director{Firstname: "Jane", Lastname: "Smith"}})
-	mux := http.NewServeMux()
 	mux.HandleFunc("GET /movies", getMovies)
 	mux.HandleFunc("GET /movies/{id}", getMovie)
 	mux.HandleFunc("POST /movies", createMovie)
