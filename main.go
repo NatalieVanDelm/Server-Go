@@ -3,24 +3,75 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
 )
 
-type Movie struct {
-	ID       string    `json: "id"`
-	Title    string    `json: "title"`
-	Director *Director `json: "director"`
+type ApiConfigData struct {
+	TMDBAccessToken string `json: "TMDBAccessToken"`
 }
 
-type Director struct {
-	Firstname string `json: "firstname"`
-	Lastname  string `json: "lastname"`
+type Movie struct {
+	ID       string `json: "id"`
+	Title    string `json: "title"`
+	Overview string `json: "overview"`
+}
+
+type Response struct {
+	Page       int    `json: "page"`
+	Results    *Movie `json: "results"`
+	TotalPages int    `json: "total_pages"`
 }
 
 var movies []Movie
+
+func loadApiConfig(filename string) (ApiConfigData, error) {
+	bytes, err := ioutil.ReadFile(filename)
+
+	if err != nil {
+		return ApiConfigData{}, err
+	}
+
+	var c ApiConfigData
+
+	err = json.Unmarshal(bytes, &c)
+	if err != nil {
+		return ApiConfigData{}, err
+	}
+	return c, nil
+}
+
+func queryTitle(w http.ResponseWriter, r *http.Request) {
+	apiConfigData, _ := loadApiConfig(".apiConfig")
+
+	title := r.PathValue("title")
+
+	url := fmt.Sprintf("https://api.themoviedb.org/3/search/movie?query=%s&include_adult=false&language=en-US&page=1", title)
+
+	req, _ := http.NewRequest("GET", url, nil)
+
+	req.Header.Add("accept", "application/json")
+	authorization := fmt.Sprintf("Bearer %s", apiConfigData.TMDBAccessToken)
+	req.Header.Add("Authorization", authorization)
+
+	res, _ := http.DefaultClient.Do(req)
+
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+
+	fmt.Println(string(body))
+
+	var response Response
+	json.NewDecoder(res.Body).Decode(&response)
+	var movie Movie
+
+	json.NewEncoder(w).Encode(movie)
+}
 
 func getMovies(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -59,7 +110,7 @@ func createMovie(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "POST request succesful\n")
 	movie.ID = strconv.Itoa(rand.Intn(100000000))
 	movie.Title = r.FormValue("title")
-	movie.Director = &Director{Firstname: r.FormValue("firstname"), Lastname: r.FormValue("lastname")}
+	movie.Overview = r.FormValue("overview")
 	movies = append(movies, movie)
 	json.NewEncoder(w).Encode(movies)
 }
@@ -80,27 +131,32 @@ func updateMovie(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(movies)
 }
 
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/hello" {
-		http.Error(w, "404 not found", http.StatusNotFound)
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse the HTML template
+	tmpl, err := template.ParseFiles("./static/index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if r.Method != "GET" {
-		http.Error(w, "method is not supported", http.StatusNotFound)
+
+	// Execute the template with the list of items as data
+	err = tmpl.Execute(w, movies)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	fmt.Fprint(w, "hello!")
 }
 
 func main() {
-	movies = append(movies, Movie{ID: "1", Title: "Movie1", Director: &Director{Firstname: "John", Lastname: "Doe"}})
-	movies = append(movies, Movie{ID: "2", Title: "Movie2", Director: &Director{Firstname: "Jane", Lastname: "Smith"}})
+	movies = append(movies, Movie{ID: "1", Title: "Movie1", Overview: "goodgood movie"})
 
 	mux := http.NewServeMux()
 
 	// webserver:
-	fileServer := http.FileServer(http.Dir("./static"))
-	mux.Handle("/", fileServer)
-	mux.HandleFunc("/hello", helloHandler)
+	fileServer := http.FileServer(http.Dir("./"))
+	mux.Handle("/static/", fileServer)
+	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/tmdb/{title}", queryTitle)
 
 	// crud api:
 	mux.HandleFunc("GET /movies", getMovies)

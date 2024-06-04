@@ -1,13 +1,22 @@
 <html>
     <head>
         <title>Movie Database</title>
+        <script>
+            function deleteItem(id) {
+                fetch('/movies/' + id,  {
+                    method: 'DELETE'
+                })
+            }
+        </script>
     </head>
     <body>
         <h2>Movie Database!</h2>
-        <a href="/form.html">Add movies</a>
+        <a href="/static/form.html">Add movies</a>
         <h3>All movies:</h3>
         <ul>
-            <li>Movie 1</li>
+            {{range .}}
+                <li id="movie-{{.ID}}">{{.Title}} - {{.Overview}} <button onClick="deleteItem({{.ID}})">X</button></li>
+            {{end}}
         </ul>
     </body>
 </html>
